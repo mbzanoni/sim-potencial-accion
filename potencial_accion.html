@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Potencial de Acción</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --cyan: #58a6ff;
+    --orange: #f78166;
+    --purple: #bc8cff;
+    --green: #39d353;
+    --yellow: #e3b341;
+    --text: #e6edf3;
+    --muted: #8b949e;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--cyan);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  header span {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .controls { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .input-group { margin-bottom: 14px; }
+  .input-group:last-child { margin-bottom: 0; }
+  .input-group label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .input-group label .val {
+    font-family: 'Space Mono', monospace;
+    color: var(--text);
+    font-size: 11px;
+  }
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--cyan);
+    cursor: pointer;
+  }
+
+  /* mode: solo single y spatial */
+  .mode-row { display: flex; gap: 6px; margin-bottom: 12px; }
+  .mode-btn {
+    flex: 1;
+    padding: 8px 4px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .mode-btn.active {
+    background: rgba(88,166,255,0.12);
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .info-box {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.65;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: rgba(255,255,255,0.02);
+  }
+  .info-box b { color: var(--text); font-weight: 500; }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    background: transparent;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    border: 1px solid var(--orange);
+    color: var(--orange);
+    margin-bottom: 7px;
+  }
+  .btn:hover { background: rgba(247,129,102,0.1); }
+  .btn-reset {
+    border-color: var(--muted);
+    color: var(--muted);
+    margin-bottom: 0;
+  }
+  .btn-reset:hover { background: rgba(255,255,255,0.05); }
+
+  /* status */
+  .status-bar {
+    display: flex;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .stat { flex:1; padding:10px 14px; border-right:1px solid var(--border); }
+  .stat:last-child { border-right:none; }
+  .stat .val {
+    font-family: 'Space Mono', monospace;
+    font-size: 15px; font-weight:700;
+    line-height:1; margin-bottom:3px;
+  }
+  .stat .lbl {
+    font-size:9px; color:var(--muted);
+    text-transform:uppercase; letter-spacing:0.5px;
+  }
+
+  /* chart */
+  .chart-meta {
+    display:flex; justify-content:space-between;
+    align-items:center; margin-bottom:5px;
+  }
+  .chart-label {
+    font-family:'Space Mono',monospace;
+    font-size:9px; color:var(--muted);
+    letter-spacing:1px; text-transform:uppercase;
+  }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; }
+  .legend-item { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--muted); }
+  .legend-dot  { width:7px; height:7px; border-radius:50%; }
+  canvas {
+    display:block; width:100%;
+    border-radius:6px;
+    background:var(--panel);
+    border:1px solid var(--border);
+  }
+
+  /* consignas */
+  .consignas {
+    margin-top: 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+  .consignas-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .consigna-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+  }
+  .consigna {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 13px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    position: relative;
+  }
+  .consigna:hover { border-color: var(--cyan); }
+  .consigna.active { border-color: var(--yellow); }
+  .consigna-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-bottom: 5px;
+    letter-spacing: 1px;
+  }
+  .consigna-text {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .consigna-hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid var(--border);
+    display: none;
+    line-height: 1.6;
+  }
+  .consigna.active .consigna-hint { display: block; }
+  .hint-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--yellow);
+    letter-spacing: 1px;
+    margin-bottom: 3px;
+  }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Potencial de acción</h1>
+  <span>modelo Hodgkin-Huxley</span>
+</header>
+
+<div class="layout">
+
+  <!-- CONTROLES -->
+  <div class="controls">
+
+    <div class="card">
+      <div class="card-title">Parámetros del estímulo</div>
+      <div class="info-box" style="margin-bottom:14px">
+        Una señal del medio externo genera una corriente excitatoria que modifica el potencial de membrana de la neurona. Variá la amplitud y la duración para explorar el principio todo-o-nada.
+      </div>
+
+      <div class="input-group">
+        <label>Amplitud <span class="val" id="val-amp">+8 µA/cm²</span></label>
+        <input type="range" id="stim-amp" min="0" max="40" step="0.5" value="8"
+               oninput="syncLabel('val-amp', this.value, ' µA/cm²', true)">
+      </div>
+
+      <div class="input-group">
+        <label>Duración del pulso <span class="val" id="val-dur">2 ms</span></label>
+        <input type="range" id="stim-dur" min="0.5" max="10" step="0.5" value="2"
+               oninput="syncLabel('val-dur', this.value, ' ms')">
+      </div>
+    </div>
+
+    <button class="btn" onclick="fire()">▶ Estimular</button>
+    <button class="btn btn-reset" onclick="hardReset()">✕ Reiniciar</button>
+
+  </div>
+
+  <!-- GRÁFICO -->
+  <div>
+    <div class="status-bar">
+      <div class="stat">
+        <div class="val" id="stat-vm" style="color:var(--cyan)">—</div>
+        <div class="lbl">Vm final</div>
+      </div>
+      <div class="stat">
+        <div class="val" id="stat-state" style="color:var(--muted)">—</div>
+        <div class="lbl">Estado</div>
+      </div>
+      <div class="stat">
+        <div class="val" id="stat-fires" style="color:var(--green)">0</div>
+        <div class="lbl">Disparos</div>
+      </div>
+    </div>
+
+    <div class="chart-meta">
+      <div class="chart-label">Potencial de membrana Vm (mV) · tiempo (ms)</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div>Vm</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,107,107,0.7)"></div>Umbral</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,255,255,0.22)"></div>Reposo (−70 mV)</div>
+      </div>
+    </div>
+    <canvas id="cvMain" height="300"></canvas>
+  </div>
+
+</div>
+
+<!-- CONSIGNAS -->
+<div class="consignas">
+  <div class="consignas-title">Consignas de exploración — hacé clic para ver la pista</div>
+  <div class="consigna-grid" id="consigna-grid"></div>
+</div>
+
+<script>
+// ── Simulación HH ────────────────────────────────────────────────────────────
+const DT=0.05, T_TOTAL=120, N=Math.round(T_TOTAL/DT);
+const gNa_max=120, gK_max=36, gL_c=0.3;
+const ENa=50, EK=-77, EL_base=-80.6, Cm=1.0;
+const VREST=-70, VTHR=-55;
+
+let vmArr=[], iStimArr=[], fireCount=0;
+
+function am(V){ let x=-(V+45); return Math.abs(x)<1e-7?1:0.1*x/(Math.exp(x/10)-1); }
+function bm(V){ return 4*Math.exp(-(V+70)/18); }
+function ah(V){ return 0.07*Math.exp(-(V+70)/20); }
+function bh(V){ return 1/(Math.exp(-(V+40)/10)+1); }
+function an(V){ let x=-(V+60); return Math.abs(x)<1e-7?0.1:0.01*x/(Math.exp(x/10)-1); }
+function bn(V){ return 0.125*Math.exp(-(V+70)/80); }
+
+function buildIstim(){
+  const A   = parseFloat(document.getElementById('stim-amp').value);
+  const dur = parseFloat(document.getElementById('stim-dur').value);
+  const arr = new Float32Array(N);
+  const onset=10, off=onset+dur;
+  for(let i=0;i<N;i++){ const t=i*DT; if(t>=onset&&t<off) arr[i]=A; }
+  return arr;
+}
+
+// Canonical AP waveform: always identical shape, anchored at t=0 = threshold crossing
+function canonicalAP(t) {
+  // Piecewise smooth: rise, fast repol, undershoot, recovery
+  // All transitions are continuous (no kinks)
+  const rise   = 0.5;   // ms to peak
+  const peak   = 40;    // mV
+  const under  = -80;   // undershoot floor
+  const tau1   = 0.7;   // repol time constant
+  const tau2   = 4.0;   // recovery time constant
+
+  if(t < 0) return VTHR;
+
+  // Rise phase: sigmoid-like
+  if(t <= rise) {
+    return VTHR + (peak - VTHR) * (t / rise);
+  }
+
+  // After peak: fast repolarization + undershoot + slow recovery
+  // Use sum of exponentials (like a real AP waveform)
+  const u = t - rise;
+  const fast  =  (peak)      * Math.exp(-u / tau1);
+  const slow  = -(peak - under + VREST) * (1 - Math.exp(-u / tau1)) * Math.exp(-u / tau2);
+  return fast + slow + VREST;
+}
+
+function runSim(){
+  iStimArr = buildIstim();
+
+  // Run HH to get subthreshold trace and detect first threshold crossing
+  let V=VREST;
+  let m=am(V)/(am(V)+bm(V));
+  let h=ah(V)/(ah(V)+bh(V));
+  let n=an(V)/(an(V)+bn(V));
+  const hhArr = new Float32Array(N);
+  let spikeStep = -1;
+
+  for(let i=0;i<N;i++){
+    const Is=iStimArr[i];
+    const gNa=gNa_max*m*m*m*h;
+    const gK =gK_max *n*n*n*n;
+    const INa=gNa*(V-ENa), IK=gK*(V-EK), IL=gL_c*(V-EL_base);
+    V += DT*(-INa-IK-IL+Is)/Cm;
+    m += DT*(am(V)*(1-m)-bm(V)*m);
+    h += DT*(ah(V)*(1-h)-bh(V)*h);
+    n += DT*(an(V)*(1-n)-bn(V)*n);
+    if(!isFinite(V)||V>110) V=110;
+    if(V<-110) V=-110;
+    hhArr[i]=V;
+    if(spikeStep<0 && V>VTHR) spikeStep=i;
+  }
+
+  vmArr = new Float32Array(N);
+  fireCount = spikeStep >= 0 ? 1 : 0;
+
+  if(spikeStep >= 0){
+    // Subthreshold: show HH up to the step BEFORE threshold
+    for(let i=0;i<spikeStep;i++) vmArr[i]=hhArr[i];
+    // At and after threshold: always the same canonical shape
+    for(let i=spikeStep;i<N;i++){
+      vmArr[i] = canonicalAP((i - spikeStep) * DT);
+    }
+  } else {
+    for(let i=0;i<N;i++) vmArr[i]=hhArr[i];
+  }
+
+  updateStats(); drawVoltage();
+}
+
+function updateStats(){
+  const last=vmArr.length?vmArr[vmArr.length-1]:null;
+  document.getElementById('stat-vm').textContent =
+    last!==null ? (last>=0?'+':'')+last.toFixed(1)+' mV' : '—';
+  let lbl,col;
+  if(fireCount>1)     { lbl=fireCount+' disparos'; col='var(--green)'; }
+  else if(fireCount===1){ lbl='1 disparo';          col='var(--green)'; }
+  else                  { lbl='Sin disparo';        col='var(--orange)'; }
+  document.getElementById('stat-state').textContent=lbl;
+  document.getElementById('stat-state').style.color=col;
+  document.getElementById('stat-fires').textContent=fireCount;
+}
+
+// ── Dibujo ───────────────────────────────────────────────────────────────────
+function drawVoltage(){
+  const canvas=document.getElementById('cvMain');
+  const dpr=window.devicePixelRatio||1;
+  const cssW=canvas.parentElement.getBoundingClientRect().width, cssH=300;
+  canvas.width=cssW*dpr; canvas.height=cssH*dpr;
+  canvas.style.width=cssW+'px'; canvas.style.height=cssH+'px';
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  const W=cssW, H=cssH;
+  const padT=20,padB=28,padL=46,padR=12;
+  const cW=W-padL-padR, cH=H-padT-padB;
+  const minV=-90, maxV=65;
+
+  ctx.fillStyle='#161b22'; ctx.fillRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+  for(let i=0;i<=24;i++){ const x=padL+i/24*cW; ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+cH); ctx.stroke(); }
+  for(let j=0;j<=10;j++){ const y=padT+j/10*cH; ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke(); }
+
+  function vy(v){ return padT+(1-(v-minV)/(maxV-minV))*cH; }
+
+  // reposo
+  ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1; ctx.setLineDash([4,5]);
+  ctx.beginPath(); ctx.moveTo(padL,vy(VREST)); ctx.lineTo(padL+cW,vy(VREST)); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+  ctx.fillStyle='rgba(255,255,255,0.28)'; ctx.font='8px Space Mono,monospace';
+  ctx.fillText(VREST+' mV', padL+5, vy(VREST)+10);
+
+  // umbral
+  ctx.save(); ctx.strokeStyle='rgba(255,107,107,0.65)'; ctx.lineWidth=1; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(padL,vy(VTHR)); ctx.lineTo(padL+cW,vy(VTHR)); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+  ctx.fillStyle='rgba(255,107,107,0.75)'; ctx.font='9px Space Mono,monospace';
+  ctx.fillText('umbral '+VTHR+' mV', padL+5, vy(VTHR)-4);
+
+  // traza Vm
+  if(vmArr&&vmArr.length){
+    ctx.save();
+    ctx.shadowColor='rgba(88,166,255,0.4)'; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.strokeStyle='rgba(88,166,255,0.2)'; ctx.lineWidth=5;
+    for(let i=0;i<N;i++){ const x=padL+i/N*cW,y=vy(vmArr[i]); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.strokeStyle='#58a6ff'; ctx.lineWidth=1.8;
+    for(let i=0;i<N;i++){ const x=padL+i/N*cW,y=vy(vmArr[i]); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.strokeStyle='rgba(88,166,255,0.4)'; ctx.lineWidth=1.5;
+    ctx.moveTo(padL,vy(VREST)); ctx.lineTo(padL+cW,vy(VREST)); ctx.stroke();
+  }
+
+  // ejes Y
+  ctx.fillStyle='rgba(139,148,158,0.7)'; ctx.font='9px Space Mono,monospace';
+  for(let v=-80;v<=60;v+=20) ctx.fillText(v, 2, vy(v)+3);
+
+  // eje X
+  ctx.fillStyle='rgba(139,148,158,0.55)'; ctx.font='9px Space Mono,monospace';
+  for(let t=0;t<=T_TOTAL;t+=20){ const x=padL+t/T_TOTAL*cW; ctx.fillText(t,x-5,padT+cH+4); }
+  ctx.fillText('ms', padL+cW-8, padT+cH+4);
+}
+
+// ── UI ───────────────────────────────────────────────────────────────────────
+function syncLabel(id,val,unit,signed=false){
+  const v=parseFloat(val);
+  document.getElementById(id).textContent=(signed&&v>0?'+':'')+v+unit;
+}
+
+function fire(){ runSim(); }
+
+function hardReset(){
+  vmArr=[]; iStimArr=[]; fireCount=0;
+  document.getElementById('stim-amp').value=8;
+  syncLabel('val-amp',8,' µA/cm²',true);
+  document.getElementById('stat-vm').textContent='—';
+  document.getElementById('stat-state').textContent='—';
+  document.getElementById('stat-state').style.color='var(--muted)';
+  document.getElementById('stat-fires').textContent='0';
+  drawVoltage();
+}
+
+// ── Consignas ────────────────────────────────────────────────────────────────
+const consignas = [
+  {
+    texto: "¿Qué pasa si el estímulo es muy débil? ¿El potencial de membrana responde de alguna manera o no ocurre nada?",
+    pista: "Modo: <b>Única</b>. Bajá la amplitud hasta valores muy pequeños (1–3 µA/cm²) y estimulá. Fijate si Vm se desplaza un poco o no cambia en absoluto."
+  },
+  {
+    texto: "Encontrá el umbral: ¿a partir de qué amplitud se dispara un potencial de acción completo?",
+    pista: "Modo: <b>Única</b>. Empezá con amplitud baja y subí de a 0.5 µA/cm². Buscá el valor mínimo que produce un disparo. ¿Qué pasa justo por debajo de ese valor?"
+  },
+  {
+    texto: "Comprobá el principio todo-o-nada: ¿cambia la forma o la altura del potencial de acción si aumentás mucho la amplitud?",
+    pista: "Modo: <b>Única</b>. Una vez que encontraste el umbral, duplicá y triplicá la amplitud. Observá si el pico de Vm cambia."
+  },
+  {
+    texto: "¿Influye la duración del pulso? ¿Un pulso muy corto pero intenso produce el mismo resultado que uno largo y suave?",
+    pista: "Bajá la amplitud a un valor subumbral y aumentá la duración. ¿Existe más de una combinación de amplitud + duración que genere un disparo?"
+  }
+];
+
+function buildConsignas(){
+  const grid = document.getElementById('consigna-grid');
+  consignas.forEach((c,i)=>{
+    const div = document.createElement('div');
+    div.className = 'consigna';
+    div.innerHTML = `
+      <div class="consigna-num">CONSIGNA ${i+1}</div>
+      <div class="consigna-text">${c.texto}</div>
+      <div class="consigna-hint">
+        <div class="hint-label">PISTA →</div>
+        ${c.pista}
+      </div>`;
+    div.addEventListener('click', ()=>{
+      const wasActive = div.classList.contains('active');
+      document.querySelectorAll('.consigna').forEach(d=>d.classList.remove('active'));
+      if(!wasActive) div.classList.add('active');
+    });
+    grid.appendChild(div);
+  });
+}
+
+window.addEventListener('load', ()=>{ drawVoltage(); buildConsignas(); });
+window.addEventListener('resize', drawVoltage);
+</script>
+</body>
+</html>
