@@ -297,21 +297,6 @@
 
   <!-- GRÁFICO -->
   <div>
-    <div class="status-bar">
-      <div class="stat">
-        <div class="val" id="stat-vm" style="color:var(--cyan)">—</div>
-        <div class="lbl">Vm final</div>
-      </div>
-      <div class="stat">
-        <div class="val" id="stat-state" style="color:var(--muted)">—</div>
-        <div class="lbl">Estado</div>
-      </div>
-      <div class="stat">
-        <div class="val" id="stat-fires" style="color:var(--green)">0</div>
-        <div class="lbl">Disparos</div>
-      </div>
-    </div>
-
     <div class="chart-meta">
       <div class="chart-label">Potencial de membrana Vm (mV) · tiempo (ms)</div>
       <div class="legend">
@@ -382,58 +367,39 @@ function canonicalAP(t) {
 
 function runSim(){
   iStimArr = buildIstim();
+  const thr = getThreshold();
 
-  // Run HH to get subthreshold trace and detect first threshold crossing
-  let V=VREST;
-  let m=am(V)/(am(V)+bm(V));
-  let h=ah(V)/(ah(V)+bh(V));
-  let n=an(V)/(an(V)+bn(V));
+  // Simple passive membrane for subthreshold response
+  // tau_m = Rm*Cm ≈ 10 ms; Vm decays back to rest exponentially
+  const tau_m = 10.0;  // ms
+  const Rm = 10.0;     // MΩ·cm² (input resistance, scales deflection)
+
   const hhArr = new Float32Array(N);
+  let V = VREST;
   let spikeStep = -1;
 
-  for(let i=0;i<N;i++){
-    const Is=iStimArr[i];
-    const gNa=gNa_max*m*m*m*h;
-    const gK =gK_max *n*n*n*n;
-    const INa=gNa*(V-ENa), IK=gK*(V-EK), IL=gL_c*(V-EL_base);
-    V += DT*(-INa-IK-IL+Is)/Cm;
-    m += DT*(am(V)*(1-m)-bm(V)*m);
-    h += DT*(ah(V)*(1-h)-bh(V)*h);
-    n += DT*(an(V)*(1-n)-bn(V)*n);
-    if(!isFinite(V)||V>110) V=110;
-    if(V<-110) V=-110;
-    hhArr[i]=V;
-    if(spikeStep<0 && V>getThreshold()) spikeStep=i;
+  for(let i = 0; i < N; i++){
+    const Is = iStimArr[i];
+    // dV/dt = -(V - VREST)/tau_m + Rm*Is/tau_m
+    V += DT * (-(V - VREST) / tau_m + Rm * Is / tau_m);
+    if(V < -100) V = -100;
+    // Hard cap: if passive response would exceed threshold, it can't —
+    // only the canonical spike fires, never the passive model
+    if(spikeStep < 0 && V >= thr) spikeStep = i;
+    hhArr[i] = Math.min(V, thr - 0.1); // never let passive trace cross threshold visually
   }
 
   vmArr = new Float32Array(N);
   fireCount = spikeStep >= 0 ? 1 : 0;
 
   if(spikeStep >= 0){
-    // Subthreshold: show HH up to the step BEFORE threshold
-    for(let i=0;i<spikeStep;i++) vmArr[i]=hhArr[i];
-    // At and after threshold: always the same canonical shape
-    for(let i=spikeStep;i<N;i++){
-      vmArr[i] = canonicalAP((i - spikeStep) * DT);
-    }
+    for(let i = 0; i < spikeStep; i++) vmArr[i] = hhArr[i];
+    for(let i = spikeStep; i < N; i++) vmArr[i] = canonicalAP((i - spikeStep) * DT);
   } else {
-    for(let i=0;i<N;i++) vmArr[i]=hhArr[i];
+    for(let i = 0; i < N; i++) vmArr[i] = hhArr[i];
   }
 
-  updateStats(); drawVoltage();
-}
-
-function updateStats(){
-  const last=vmArr.length?vmArr[vmArr.length-1]:null;
-  document.getElementById('stat-vm').textContent =
-    last!==null ? (last>=0?'+':'')+last.toFixed(1)+' mV' : '—';
-  let lbl,col;
-  if(fireCount>1)     { lbl=fireCount+' disparos'; col='var(--green)'; }
-  else if(fireCount===1){ lbl='1 disparo';          col='var(--green)'; }
-  else                  { lbl='Sin disparo';        col='var(--orange)'; }
-  document.getElementById('stat-state').textContent=lbl;
-  document.getElementById('stat-state').style.color=col;
-  document.getElementById('stat-fires').textContent=fireCount;
+  drawVoltage();
 }
 
 // ── Dibujo ───────────────────────────────────────────────────────────────────
@@ -511,10 +477,6 @@ function hardReset(){
   syncLabel('val-amp',8,' µA/cm²',true);
   document.getElementById('threshold').value=-55;
   syncLabel('val-thr',-55,' mV',true);
-  document.getElementById('stat-vm').textContent='—';
-  document.getElementById('stat-state').textContent='—';
-  document.getElementById('stat-state').style.color='var(--muted)';
-  document.getElementById('stat-fires').textContent='0';
   drawVoltage();
 }
 
