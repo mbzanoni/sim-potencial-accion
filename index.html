@@ -274,7 +274,7 @@
     <div class="card">
       <div class="card-title">Parámetros del estímulo</div>
       <div class="info-box" style="margin-bottom:14px">
-        Una señal del medio externo genera una corriente excitatoria que modifica el potencial de membrana de la neurona. Variá la amplitud y la duración para explorar el principio todo-o-nada.
+        Una señal del medio externo genera una corriente excitatoria que modifica el potencial de membrana de la neurona. Variá la amplitud para explorar el principio todo-o-nada.
       </div>
 
       <div class="input-group">
@@ -284,9 +284,9 @@
       </div>
 
       <div class="input-group">
-        <label>Duración del pulso <span class="val" id="val-dur">2 ms</span></label>
-        <input type="range" id="stim-dur" min="0.5" max="10" step="0.5" value="2"
-               oninput="syncLabel('val-dur', this.value, ' ms')">
+        <label>Umbral de disparo <span class="val" id="val-thr">-55 mV</span></label>
+        <input type="range" id="threshold" min="-65" max="-45" step="1" value="-55"
+               oninput="syncLabel('val-thr', this.value, ' mV', true); drawVoltage()">
       </div>
     </div>
 
@@ -348,37 +348,36 @@ function an(V){ let x=-(V+60); return Math.abs(x)<1e-7?0.1:0.01*x/(Math.exp(x/10
 function bn(V){ return 0.125*Math.exp(-(V+70)/80); }
 
 function buildIstim(){
-  const A   = parseFloat(document.getElementById('stim-amp').value);
-  const dur = parseFloat(document.getElementById('stim-dur').value);
+  const A = parseFloat(document.getElementById('stim-amp').value);
   const arr = new Float32Array(N);
-  const onset=10, off=onset+dur;
+  // Fixed brief pulse: 1 ms at t=10 ms — no accumulation possible
+  const onset=10, off=11;
   for(let i=0;i<N;i++){ const t=i*DT; if(t>=onset&&t<off) arr[i]=A; }
   return arr;
 }
 
 // Canonical AP waveform: always identical shape, anchored at t=0 = threshold crossing
+function getThreshold(){
+  return parseFloat(document.getElementById('threshold').value);
+}
+
 function canonicalAP(t) {
-  // Piecewise smooth: rise, fast repol, undershoot, recovery
-  // All transitions are continuous (no kinks)
-  const rise   = 0.5;   // ms to peak
-  const peak   = 40;    // mV
-  const under  = -80;   // undershoot floor
-  const tau1   = 0.7;   // repol time constant
-  const tau2   = 4.0;   // recovery time constant
+  const Vthr = getThreshold();
+  const peak = 40;
+  const undershoot = -80;
 
-  if(t < 0) return VTHR;
+  // Rise: threshold → peak in 0.5 ms
+  if(t < 0.5) return Vthr + (peak - Vthr) * (t / 0.5);
 
-  // Rise phase: sigmoid-like
-  if(t <= rise) {
-    return VTHR + (peak - VTHR) * (t / rise);
-  }
-
-  // After peak: fast repolarization + undershoot + slow recovery
-  // Use sum of exponentials (like a real AP waveform)
-  const u = t - rise;
-  const fast  =  (peak)      * Math.exp(-u / tau1);
-  const slow  = -(peak - under + VREST) * (1 - Math.exp(-u / tau1)) * Math.exp(-u / tau2);
-  return fast + slow + VREST;
+  const u = t - 0.5;
+  // Fast repol (Na+ inactivation + K+ opening): peak → undershoot
+  // tau_fast ~ 0.8 ms, then slow recovery back to VREST
+  const tau_fast = 0.8;
+  const tau_slow = 6.0;
+  const v = peak * Math.exp(-u / tau_fast)
+            + undershoot * (1 - Math.exp(-u / tau_fast)) * Math.exp(-u / tau_slow)
+            + VREST * (1 - Math.exp(-u / tau_slow));
+  return v;
 }
 
 function runSim(){
@@ -404,7 +403,7 @@ function runSim(){
     if(!isFinite(V)||V>110) V=110;
     if(V<-110) V=-110;
     hhArr[i]=V;
-    if(spikeStep<0 && V>VTHR) spikeStep=i;
+    if(spikeStep<0 && V>getThreshold()) spikeStep=i;
   }
 
   vmArr = new Float32Array(N);
@@ -468,10 +467,10 @@ function drawVoltage(){
 
   // umbral
   ctx.save(); ctx.strokeStyle='rgba(255,107,107,0.65)'; ctx.lineWidth=1; ctx.setLineDash([6,4]);
-  ctx.beginPath(); ctx.moveTo(padL,vy(VTHR)); ctx.lineTo(padL+cW,vy(VTHR)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(padL,vy(getThreshold())); ctx.lineTo(padL+cW,vy(getThreshold())); ctx.stroke();
   ctx.setLineDash([]); ctx.restore();
   ctx.fillStyle='rgba(255,107,107,0.75)'; ctx.font='9px Space Mono,monospace';
-  ctx.fillText('umbral '+VTHR+' mV', padL+5, vy(VTHR)-4);
+  ctx.fillText('umbral '+getThreshold()+' mV', padL+5, vy(getThreshold())-4);
 
   // traza Vm
   if(vmArr&&vmArr.length){
@@ -510,6 +509,8 @@ function hardReset(){
   vmArr=[]; iStimArr=[]; fireCount=0;
   document.getElementById('stim-amp').value=8;
   syncLabel('val-amp',8,' µA/cm²',true);
+  document.getElementById('threshold').value=-55;
+  syncLabel('val-thr',-55,' mV',true);
   document.getElementById('stat-vm').textContent='—';
   document.getElementById('stat-state').textContent='—';
   document.getElementById('stat-state').style.color='var(--muted)';
@@ -532,8 +533,8 @@ const consignas = [
     pista: "Modo: <b>Única</b>. Una vez que encontraste el umbral, duplicá y triplicá la amplitud. Observá si el pico de Vm cambia."
   },
   {
-    texto: "¿Influye la duración del pulso? ¿Un pulso muy corto pero intenso produce el mismo resultado que uno largo y suave?",
-    pista: "Bajá la amplitud a un valor subumbral y aumentá la duración. ¿Existe más de una combinación de amplitud + duración que genere un disparo?"
+    texto: "¿Qué pasa si bajás el umbral de disparo? ¿Se necesita menos corriente para generar un potencial de acción?",
+    pista: "Bajá el umbral a −65 mV y repetí la búsqueda del mínimo de amplitud necesario. Comparalo con el umbral en −55 mV. ¿Qué implicancia tiene esto para neuronas más o menos excitables?"
   }
 ];
 
